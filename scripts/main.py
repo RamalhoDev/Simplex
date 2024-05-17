@@ -28,9 +28,12 @@ def parse_lp(path):
     model["type_equality"] = []
     model["A"] = []
     model["A_xvars"] = []
+    model["x_bound"] = []
+    model["b_bound"] = []
+    model["ineq_bound"] = []
 
     last_pos = 1
-    last_coef = ""
+    last_coef = 1
     count_line = 0
     for i, line in enumerate(lines[1:]):
         if line[0] == "Subject":
@@ -54,19 +57,14 @@ def parse_lp(path):
         count_line = count_line + 1
     count_line = count_line + 2
     last_pos = 1
-    last_coef = ""
-    new_constr = False
+    last_coef = 1
     coefs = []
     costr_vars = []
     type_ineq = -1
     b = ""
+    end = False
     for i, line in enumerate(lines[count_line:]):
-        if line[0] == "Bounds":
-            count_line = count_line + i
-            break
-        elif line[0] == "End":
-            break
-        if line[0].find(":") != -1 and i != 0:
+        if (line[0].find(":") != -1 and i != 0) or line[0] in ["Bounds", "End"]:
             model["A"].append(coefs)
             model["A_xvars"].append(costr_vars)
             model["b"].append(b)
@@ -75,24 +73,58 @@ def parse_lp(path):
             costr_vars = []
             type_ineq = -1
             b = ""
+            last_pos = 1
+            last_coef = 1
 
+        if line[0] == "Bounds":
+            count_line = count_line + i
+            break
+        elif line[0] == "End":
+            end = True
+            break
+
+        previous = False
         for val in line:
+            if val.find(":") != -1:
+                continue
             try:
                 last_coef = float(val) * last_pos
+                previous = False
             except ValueError:
                 if val == "+":
                     last_pos = 1
+                    previous = True
                 elif val == "-":
                     last_pos = -1
+                    previous = True
                 elif val in ["=", ">=", "<="]:
                     type_ineq = val
+                    previous = False
                     break
                 else:
+                    if previous:
+                        last_coef = last_pos
                     coefs.append(last_coef)
                     costr_vars.append(val)
         if type_ineq != -1:
             b = float(line[-1])
-    print(model)
+
+    if not end:
+        last_pos = 1
+        last_coef = 1
+        coefs = []
+        costr_vars = []
+        type_ineq = -1
+        b = ""
+        end = False
+        print(len(lines), count_line)
+        for i, line in enumerate(lines[count_line + 1 :]):
+            if line[0] == "End":
+                break
+            model["x_bound"].append(1)
+            model["ineq_bound"].append(line[1])
+            model["b_bound"].append(line[2])
+    return model
 
 
 def parse_instance(path):

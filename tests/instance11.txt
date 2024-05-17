@@ -1,0 +1,8 @@
+Minimize
+COST: XONE - YTWO
+Subject To
+LIM1: XONE + YTWO <= 5
+LIM2: XONE + YTWO >= -2
+Bounds
+ XONE = 0
+End
