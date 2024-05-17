@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg import inv
 import random
+import sys
 
 np.seterr(divide="ignore")
 
@@ -12,13 +13,94 @@ def parse_var(val):
     return float(coef), var
 
 
+def parse_lp(path):
+    lines = []
+    with open(path, "r") as file:
+        lines = file.readlines()
+
+    lines = [line.strip().split(sep=" ") for line in lines]
+    model = {}
+    model["problem_objective"] = "min" if lines[0][0] == "Minimize" else "max"
+    model["c"] = []
+    model["x_obj"] = []
+    model["x_vars"] = set()
+    model["b"] = []
+    model["type_equality"] = []
+    model["A"] = []
+    model["A_xvars"] = []
+
+    last_pos = 1
+    last_coef = ""
+    count_line = 0
+    for i, line in enumerate(lines[1:]):
+        if line[0] == "Subject":
+            break
+
+        for val in line:
+            if val.find(":") != -1:
+                continue
+
+            try:
+                last_coef = float(val) * last_pos
+            except ValueError:
+                if val == "+":
+                    last_pos = 1
+                elif val == "-":
+                    last_pos = -1
+                else:
+                    model["c"].append(last_coef)
+                    model["x_obj"].append(val)
+                    model["x_vars"].add(val)
+        count_line = count_line + 1
+    count_line = count_line + 2
+    last_pos = 1
+    last_coef = ""
+    new_constr = False
+    coefs = []
+    costr_vars = []
+    type_ineq = -1
+    b = ""
+    for i, line in enumerate(lines[count_line:]):
+        if line[0] == "Bounds":
+            count_line = count_line + i
+            break
+        elif line[0] == "End":
+            break
+        if line[0].find(":") != -1 and i != 0:
+            model["A"].append(coefs)
+            model["A_xvars"].append(costr_vars)
+            model["b"].append(b)
+            model["type_equality"].append(type_ineq)
+            coefs = []
+            costr_vars = []
+            type_ineq = -1
+            b = ""
+
+        for val in line:
+            try:
+                last_coef = float(val) * last_pos
+            except ValueError:
+                if val == "+":
+                    last_pos = 1
+                elif val == "-":
+                    last_pos = -1
+                elif val in ["=", ">=", "<="]:
+                    type_ineq = val
+                    break
+                else:
+                    coefs.append(last_coef)
+                    costr_vars.append(val)
+        if type_ineq != -1:
+            b = float(line[-1])
+    print(model)
+
+
 def parse_instance(path):
     lines = []
     with open(path, "r") as file:
         lines = file.readlines()
 
     lines = [line.strip().split(sep=" ") for line in lines]
-
     model = {}
     model["problem_objective"] = lines[0][0]
 
@@ -117,6 +199,7 @@ def model_to_standard_form(model):
 
     for i, constr in enumerate(model["A_xvars"]):
         for j, val in enumerate(constr):
+            print(i, j, len(model["A"]), len(new_model["A"][i]))
             new_model["A"][i][int(val[1:]) - 1] = model["A"][i][j]
     new_model["b"] = np.array(model["b"])
     new_model["old_model"] = aux_model
@@ -295,8 +378,10 @@ def simplex(model):
 
 
 # path = "tests/instance.txt"
-path = "tests/instance.txt"
-model = parse_instance(path)
-model_in_standard_form = model_to_standard_form(model)
-simplex(model_in_standard_form)
-print(to_dual(model_in_standard_form))
+
+instance_file_path = sys.argv[1]
+model = parse_lp(instance_file_path)
+# model = parse_instance(instance_file_path)
+# model_in_standard_form = model_to_standard_form(model)
+# simplex(model_in_standard_form)
+# print(to_dual(model_in_standard_form))
