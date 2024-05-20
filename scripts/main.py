@@ -266,11 +266,13 @@ def model_to_standard_form(model):
         model["x_vars"]["x_folga" + str(great_index)] = great_index
         great_index = great_index + 1
 
+    model["artif_constr"] = {}
     for i, constr in enumerate(model["type_equality"]):
         model["A"][i].append(1)
-
-        model["A_xvars"][i].append("x_artif" + str(great_index))
-        model["x_vars"]["x_artif" + str(great_index)] = great_index
+        nome_var = "x_artif" + str(great_index)
+        model["A_xvars"][i].append(nome_var)
+        model["x_vars"][nome_var] = great_index
+        model["artif_constr"][nome_var] = i
         great_index = great_index + 1
 
     new_model = {}
@@ -494,23 +496,33 @@ artif_base = [
     for key, val in model_in_standard_form["old_model"]["x_vars"].items()
     if "artif" in key
 ]
+variables = {
+    val: key for (key, val) in model_in_standard_form["old_model"]["x_vars"].items()
+}
+
 base, basic_sol, pT, B_inverse = simplex(model_in_standard_form, base, c)
-artif = [x for x in base if x in artif_base]
-res = np.dot(B_inverse, model_in_standard_form["A"])
-print(res)
-print(res[:, artif])
-# print(c[base])
-# print(basic_sol)
-# custo_f = np.dot(c[base], basic_sol)
-# variables = {
-#     val: key for (key, val) in model_in_standard_form["old_model"]["x_vars"].items()
-# }
-# variables = [
-#     variables[x] + " * " + str(c[x]) + " = " + str(y) for (x, y) in zip(base, basic_sol)
-# ]
-# for i in variables:
-#     print(i)
-# print(custo_f)
+artif_in_base = [(i, x) for i, x in enumerate(base) if "artif" in variables[x]]
+
+if len(artif_in_base) > 0:
+    res = np.dot(B_inverse, model_in_standard_form["A"])
+
+    res = res[:, 0 : artif_base[0]]
+    for i, var in artif_in_base:
+        constr = model_in_standard_form["old_model"]["artif_constr"][variables[var]]
+        remove_constr = True
+        for j, val in enumerate(res[constr]):
+            if abs(val) > 0.00001:
+                base[i] = j
+                remove_constr = False
+                break
+        if remove_constr:
+            np.delete(model_in_standard_form["c"], i, 0)
+            np.delete(model_in_standard_form["A"], i, 1)
+            np.delete(model_in_standard_form["A"], constr, 0)
+            np.delete(model_in_standard_form["b"], constr, 0)
+
+print(base)
+
 model_in_standard_form["A"][:, artif_base] = 0
 (base, basic_sol, pT, B_inverse) = simplex(
     model_in_standard_form, base, model_in_standard_form["c"]
