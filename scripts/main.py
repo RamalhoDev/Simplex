@@ -413,15 +413,19 @@ def simplex(model, base, c):
 
     while 1:
         print(f" \n\n---------- ITERATION {iteration} ------------------- \n\n")
-        print(f"Base = {base}")
-        print(f"N = {N}\n")
+        # print(f"Base = {base}")
+        # print(f"N = {N}\n")
         B = model["A"][:, base]
-        print(f"B = {B}\n")
+        # print(f"B = {B}\n")
         B_inverse = inv(B)
         # print(f"B' = {B_inverse}\n")
         # print(f"b = {model['b']}\n")
         basic_sol = np.dot(B_inverse, model["b"])
-
+        for i, x in enumerate(basic_sol):
+            # if abs(x) < 0.0000001:
+            #     basic_sol[i] = 0
+            if x < -1:
+                print(x)
         # print(f"basic_sol = {basic_sol}\n")
         pT = np.dot(c[base].transpose(), B_inverse)
         # print(f"pT = {pT}\n")
@@ -430,21 +434,21 @@ def simplex(model, base, c):
             (i, x, c[x] - np.dot(pT, model["A"][:, x].reshape((-1, 1))))
             for i, x in enumerate(N)
         ]
-        print(f"s_j_real = {sorted(s_j, key= lambda x: x[2] )}\n")
+        # print(f"s_j_real = {sorted(s_j, key= lambda x: x[2] )}\n")
         aux = sorted([x for x in s_j if x[2] < -0.00001], key=lambda x: x[1])
-        print(f"s_j = {[aux]}")
+        # print(f"s_j = {[aux]}")
         s_k = [x for x in s_j if x[2] < -0.00001]
         if len(s_k) == 0:
             break
 
         s_k = min(s_k, key=lambda x: x[1])
         y = np.dot(B_inverse, model["A"][:, s_k[1]].reshape((-1, 1)))
-        print(f"y = {y}\n")
+        # print(f"y = {y}\n")
         pricing = []
         for i, val in enumerate(basic_sol):
-            if y[i] < 0.00000001:
+            if y[i] < 0.0000001:
                 continue
-            print(y[i])
+            # print(y[i])
             cal = val / y[i]
             if abs(cal) <= 0.00001:
                 cal = 0
@@ -458,7 +462,7 @@ def simplex(model, base, c):
             pricing,
             key=lambda t: (t[2], t[1]),
         )
-        print("pricing = ", removed_variable)
+        # print("pricing = ", removed_variable)
         removed_variable = removed_variable[0]
         print(f"\ninserted_variable = {s_k}\n")
         print(f"removed_variable = {removed_variable}")
@@ -501,25 +505,41 @@ variables = {
 }
 
 base, basic_sol, pT, B_inverse = simplex(model_in_standard_form, base, c)
-artif_in_base = [(i, x) for i, x in enumerate(base) if "artif" in variables[x]]
 
-if len(artif_in_base) > 0:
+aux_base = [x for x in base]
+for x in aux_base:
+    if "artif" not in variables[x]:
+        continue
+
     res = np.dot(B_inverse, model_in_standard_form["A"])
 
     res = res[:, 0 : artif_base[0]]
-    for i, var in artif_in_base:
-        constr = model_in_standard_form["old_model"]["artif_constr"][variables[var]]
-        remove_constr = True
-        for j, val in enumerate(res[constr]):
-            if abs(val) > 0.00001:
-                base[i] = j
-                remove_constr = False
-                break
-        if remove_constr:
-            np.delete(model_in_standard_form["c"], i, 0)
-            np.delete(model_in_standard_form["A"], i, 1)
-            np.delete(model_in_standard_form["A"], constr, 0)
-            np.delete(model_in_standard_form["b"], constr, 0)
+
+    constr = model_in_standard_form["old_model"]["artif_constr"][variables[x]]
+    remove_constr = True
+    for j, val in enumerate(res[constr]):
+        if abs(val) > 0.000001:
+            if j in base:
+                continue
+            index = base.index(x)
+            if j == 345:
+                print(index, j, x, val)
+            base[index] = j
+            remove_constr = False
+            break
+    if remove_constr:
+        model_in_standard_form["A"] = np.delete(model_in_standard_form["A"], constr, 0)
+        model_in_standard_form["b"] = np.delete(model_in_standard_form["b"], constr, 0)
+        model_in_standard_form["old_model"]["artif_constr"].pop(variables[x])
+        model_in_standard_form["old_model"]["artif_constr"] = {
+            key: i
+            for i, (key, val) in enumerate(
+                model_in_standard_form["old_model"]["artif_constr"].items()
+            )
+        }
+        base.remove(x)
+
+    B_inverse = inv(model_in_standard_form["A"][:, base])
 
 print(base)
 
